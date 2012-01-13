@@ -1,15 +1,13 @@
 require 'sinatra'
+require 'eventmachine'
 
-class Subscription
+class Connection
   include EM::Deferrable
   
   def send(data, id=nil)
-    data.each_line do |line|
-      line = "data: #{line.strip}\n"
-      @body_callback.call(line)
-    end
-    @body_callback.call "id: #{id}\n" if id
-    @body_callback.call "\n"
+    data.each_line{|line| output data_line(line) }
+    output id_line(id) if id
+    output end_message_line
   end
   
   def each(&block)
@@ -20,33 +18,55 @@ class Subscription
     succeed
   end
   
+  private
+  
+  def output(string)
+    @body_callback.call string
+  end
+  
+  def data_line(line)
+    "data: #{line.strip}\n"
+  end
+  
+  def id_line(id)
+    "id: #{id}\n"
+  end
+  
+  def end_message_line
+    "\n"
+  end
+  
 end
 
 class Events < Sinatra::Base
-  # register Sinatra::Async
 
-  subscriptions = []
+  connections = []
+
+  get '/test' do
+    content_type :html
+    File.read File.expand_path('../../app/views/home/index.html', __FILE__)
+  end
 
   # The long streaming request
   get '/' do
-    sub = Subscription.new
-    subscriptions << sub
-    env['async.callback'].call [200, {'Content-Type' => 'text/event-stream'}, sub]
+    c = Connection.new
+    connections << c
+    env['async.callback'].call [200, {'Content-Type' => 'text/event-stream'}, c]
     EM::PeriodicTimer.new(1) do
-      sub.send("some data")
+      c.send("some data")
     end
     throw :async
   end
   
   post '/' do
-    subscriptions.each do |s|
+    connections.each do |s|
       puts "Sending message #{params[:message]}"
       s.send params[:message]
     end
   end
   
   delete '/' do
-    subscriptions.each do |s|
+    connections.each do |s|
       s.send "Slater"
       s.close
     end
