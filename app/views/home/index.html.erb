@@ -2,10 +2,39 @@
   <script type="text/javascript" charset="utf-8">
     $(document).ready(function(){
       
-      window.eventSource = new EventSource('/events')
-      eventSource.onmessage = function(event){
-        console.log(event.data)
+      function Connection(){
+        var self = this
+        
+        this.id = Math.round(Math.random() * 1e10)
+        this.eventSource = new EventSource('/events?id='+this.id)
+        
+        $(window).unload(function(){
+          self.close()
+        });
       }
+      Connection.prototype = {
+        onMessage: function(callback){
+          this.eventSource.onmessage = function(event){
+            callback(event.data)
+          }
+        },
+        send: function(message){
+          $.post('/events', {message: message})
+        },
+        close: function(){
+          this.eventSource.close()
+          $.ajax('/events/conn/'+this.id, {
+            type: 'DELETE'
+          })
+        }
+      }
+      
+      /////////////////////////////////////////
+      
+      connection = new Connection()
+      connection.onMessage(function(message){
+        console.log(message)
+      })
       
     })
   </script>
