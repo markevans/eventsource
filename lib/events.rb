@@ -91,10 +91,15 @@ class Events < Sinatra::Base
 
   # The long streaming request
   get '/' do
-    log "CALLING GET / with ID #{params[:id]}"
-    conn = Connection.new(params[:id])
-    env['async.callback'].call [200, {'Content-Type' => 'text/event-stream'}, conn]
-    throw :async
+    id = params[:id]
+    log "CALLING GET / with ID #{id}"
+    if Connection.find(id)
+      "Already established a connection"
+    else
+      conn = Connection.new(id)
+      env['async.callback'].call [200, {'Content-Type' => 'text/event-stream'}, conn]
+      throw :async
+    end
   end
   
   post '/' do
